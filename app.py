@@ -27,13 +27,20 @@ def proxy_api():
         debug_info["Response Snippet"] = res.text[:400] + "..." if len(res.text) > 400 else res.text
         res.raise_for_status()
         raw_text = res.text
-
-        if "<pre>" in raw_text and "</pre>" in raw_text:
-            json_str = raw_text.split("<pre>")[1].split("</pre>")[0]
+        
+        content_type = res.headers.get('Content-Type', '')
+        
+        json_str = None
+        if 'application/json' in content_type:
+            json_str = raw_text
+        elif 'text/html' in content_type and '<pre>' in raw_text:
+            json_str = raw_text.split('<pre>')[1].split('</pre>')[0]
+        
+        if json_str:
             data = json.loads(json_str)
             return jsonify({"success": True, "debug": debug_info, "data": data})
         else:
-            raise ValueError("API response was successful but contained no <pre> data tag.")
+            raise ValueError("No valid JSON data or <pre> tag found in the response.")
 
     except Exception as e:
         debug_info["Error"] = str(e)
