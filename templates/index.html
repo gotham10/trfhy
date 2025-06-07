@@ -39,6 +39,13 @@
         #terminal-input:disabled {
             background-color: transparent;
         }
+        .debug-info {
+            color: #888;
+            border-left: 2px solid #555;
+            padding-left: 1em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
     </style>
 </head>
 <body>
@@ -89,10 +96,15 @@
                 const url = `/api/items?search=${s}&variant=${variant}`;
                 try {
                     const res = await fetch(url);
-                    if (!res.ok) return { pets: null, link: null };
-                    const data = await res.json();
-                    if (data && data.pets && data.pets.length > 0) {
-                        return { pets: data.pets, link: url };
+                    const response = await res.json();
+                    
+                    const debug_div = document.createElement('div');
+                    debug_div.className = 'debug-info';
+                    debug_div.innerHTML = `--- DEBUG for ${search} (${variant}) ---<br>` + Object.entries(response.debug).map(([key, value]) => `${key}: ${String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;")}`).join('<br>') + '<br>---------------------------------';
+                    output.appendChild(debug_div);
+
+                    if (response.success && response.data && response.data.pets && response.data.pets.length > 0) {
+                        return { pets: response.data.pets, link: url };
                     }
                 } catch (e) {
                    return { pets: null, link: null };
