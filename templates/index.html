@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGS Infinity Value Calculator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+        :root {
+            --background: #1a1e24;
+            --foreground: #dcdfe4;
+            --prompt: #61afef;
+            --input: #ffffff;
+            --border: #4d94ff;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Fira Code', monospace;
+        }
+        .terminal {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            max-height: 800px;
+            background-color: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .terminal-output {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            color: var(--foreground);
+            font-size: 0.95em;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .terminal-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        .terminal-output::-webkit-scrollbar-track {
+            background: #2c313a;
+        }
+        .terminal-output::-webkit-scrollbar-thumb {
+            background-color: var(--border);
+            border-radius: 4px;
+        }
+        .line {
+            display: flex;
+        }
+        .prompt {
+            color: var(--prompt);
+            margin-right: 0.5em;
+            flex-shrink: 0;
+        }
+        .input-line {
+            display: flex;
+            padding: 0 1.5rem 1.5rem;
+        }
+        #terminal-input {
+            flex-grow: 1;
+            background-color: transparent;
+            border: none;
+            color: var(--input);
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+        }
+        #terminal-input:disabled {
+            background-color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="terminal-output" id="terminal-output"></div>
+        <div class="input-line">
+            <span class="prompt" id="prompt">></span>
+            <input type="text" id="terminal-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" autofocus>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const output = document.getElementById('terminal-output');
+            const input = document.getElementById('terminal-input');
+            const prompt = document.getElementById('prompt');
+
+            let total_value = 0;
+            let added_pets = [];
+            let state = 'initial';
+            let pet_search_input = '';
+
+            const unescapeHtml = (text) => {
+                const doc = new DOMParser().parseFromString(text, 'text/html');
+                return doc.documentElement.textContent;
+            };
+
+            const parseValue = (value_str) => {
+                value_str = String(value_str).trim().toUpperCase();
+                if (!value_str) return 0;
+                const multipliers = { 'SX': 1e21, 'QI': 1e18, 'QA': 1e15, 'Q': 1e15, 'T': 1e12, 'B': 1e9, 'M': 1e6, 'K': 1e3 };
+                for (const suffix of Object.keys(multipliers).sort((a, b) => b.length - a.length)) {
+                    if (value_str.endsWith(suffix)) {
+                        const number_part = value_str.slice(0, -suffix.length);
+                        const multiplier = multipliers[suffix];
+                        try {
+                            const value = parseFloat(number_part) * multiplier;
+                            return parseInt(value);
+                        } catch (e) { return 0; }
+                    }
+                }
+                try { return parseInt(parseFloat(value_str)); } catch (e) { return 0; }
+            };
+
+            const normalizeVariant = (v) => {
+                v = v.toLowerCase();
+                const variants = { "0": "All", "all": "All", "1": "Normal", "normal": "Normal", "2": "Shiny", "shiny": "Shiny", "3": "Mythic", "mythic": "Mythic", "4": "ShinyMythic", "shinymythic": "ShinyMythic" };
+                return variants[v] || null;
+            };
+
+            const fetchData = async (search, variant) => {
+                const tries = [search.toLowerCase(), search.charAt(0).toUpperCase() + search.slice(1).toLowerCase(), search];
+                for (const term of tries) {
+                    const s = term.replace(/ /g, "+");
+                    const url = `https://bgsi-kyc3.onrender.com/api/items?search=${s}&variant=${variant}`;
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) continue;
+                        const raw = await res.text();
+                        const pre_data = raw.includes("<pre>") ? raw.split("<pre>")[1].split("</pre>")[0] : raw;
+                        const data = JSON.parse(unescapeHtml(pre_data));
+                        if (data && data.pets && data.pets.length > 0) {
+                            return { pets: data.pets, link: url };
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                return { pets: null, link: null };
+            };
+
+            const padLines = (lines) => {
+                const splitLines = lines.map(line => line.split(/:(.*)/s).map(s => s.trim()));
+                const width = Math.max(...splitLines.map(line => line[0].length));
+                return splitLines.map(line => `${line[0].padEnd(width, ' ')}: ${line[1]}`).join('\n');
+            };
+
+            const print = (text, isUserInput = false) => {
+                const line = document.createElement('div');
+                if (isUserInput) {
+                    line.classList.add('line');
+                    const userPrompt = document.createElement('span');
+                    userPrompt.classList.add('prompt');
+                    userPrompt.textContent = '>';
+                    line.appendChild(userPrompt);
+                }
+                line.append(document.createTextNode(text));
+                output.appendChild(line);
+                output.scrollTop = output.scrollHeight;
+            };
+
+            const clearScreen = () => {
+                output.innerHTML = '';
+            };
+            
+            const showWelcomeScreen = () => {
+                clearScreen();
+                print(".".repeat(50));
+                print("||" + " BGS Infinity Value Calculator ".center(46, ' ') + "||");
+                print("'".repeat(50));
+                print("\nWelcome! This tool allows you to calculate the total value of your pets.");
+                print("\n----- HOW TO USE -----");
+                print("1. Enter one or more pet names separated by commas if you would like or just put one pet name..");
+                print("2. Enter the desired variants, also separated by commas if you would like or just put one variant.");
+                print("3. The tool will fetch the data and update your total.");
+                print("\n----- VARIANTS -----");
+                print("- You can either enter the variant number or the variant name or multipul useing commas.");
+                print("1. All = 0");
+                print("2. Normal = 1");
+                print("3. Shiny = 2");
+                print("4. Mythic = 3");
+                print("5. ShinyMythic = 4");
+                print("\n----- COMMANDS -----");
+                print(" - Type 'reset' at the pet prompt to clear your current list and total.");
+                print(" - Type 'exit' at any prompt to close the application.");
+                print(" - Type 'mainmenu' at any prompt to return to the main menu.");
+                print("\nPress Enter to begin...");
+                prompt.style.visibility = 'hidden';
+            };
+            
+            const showCurrentDataScreen = () => {
+                clearScreen();
+                print("--- CURRENT DATA ---");
+                if (added_pets.length === 0) {
+                    print("  (None)");
+                } else {
+                    added_pets.forEach(pet_info => print(`  - ${pet_info}`));
+                }
+                print(`\nCURRENT TOTAL VALUE: ${total_value.toLocaleString()}`);
+                print("-".repeat(25));
+                print("\nEnter pet name(s)... ");
+                prompt.style.visibility = 'visible';
+                state = 'awaiting_pet_name';
+            };
+
+            const processEnter = async () => {
+                const cmd = input.value.trim();
+                input.value = '';
+
+                if (state === 'paused') {
+                    showCurrentDataScreen();
+                    return;
+                }
+                
+                print(cmd, true);
+
+                if (state === 'initial') {
+                    showCurrentDataScreen();
+                    return;
+                }
+
+                const cmdLower = cmd.toLowerCase();
+
+                if (cmdLower === 'exit') {
+                    print("\nApplication halted. Refresh the page to restart.");
+                    input.disabled = true;
+                    prompt.style.visibility = 'hidden';
+                    return;
+                }
+
+                if (cmdLower === 'mainmenu') {
+                    total_value = 0;
+                    added_pets = [];
+                    showWelcomeScreen();
+                    state = 'initial';
+                    return;
+                }
+
+                if (state === 'awaiting_pet_name') {
+                    if (cmdLower === 'reset') {
+                        total_value = 0;
+                        added_pets = [];
+                        print("\n>>> Data has been reset. Press Enter to continue.");
+                        state = 'paused';
+                        prompt.style.visibility = 'hidden';
+                        return;
+                    }
+                    if (!cmd) {
+                        print("\nPet name cannot be blank. Press Enter to try again.");
+                        state = 'paused';
+                        prompt.style.visibility = 'hidden';
+                        return;
+                    }
+                    pet_search_input = cmd;
+                    print("\nEnter variant(s)... ");
+                    state = 'awaiting_variant';
+                } else if (state === 'awaiting_variant') {
+                    if (!cmd) {
+                        print("\nVariant cannot be blank. Press Enter to try again.");
+                        state = 'paused';
+                        prompt.style.visibility = 'hidden';
+                        return;
+                    }
+
+                    const searches = pet_search_input.split(',').map(s => s.trim());
+                    const raw_variants = cmd.split(',').map(v => v.trim());
+                    const valid_variants = [];
+                    const invalid_variants = [];
+
+                    raw_variants.forEach(v_raw => {
+                        const norm_v = normalizeVariant(v_raw);
+                        if (norm_v) {
+                            if (norm_v === "All") {
+                                valid_variants.push("Normal", "Shiny", "Mythic", "ShinyMythic");
+                            } else {
+                                valid_variants.push(norm_v);
+                            }
+                        } else {
+                            invalid_variants.push(v_raw);
+                        }
+                    });
+
+                    const variants_to_try = [...new Set(valid_variants)];
+                    if (invalid_variants.length > 0) {
+                        print(`\nInvalid variants ignored: ${invalid_variants.join(', ')}`);
+                    }
+
+                    if (variants_to_try.length === 0) {
+                        print("\nNo valid variants were entered. Press Enter to try again.");
+                        state = 'paused';
+                        prompt.style.visibility = 'hidden';
+                        return;
+                    }
+                    
+                    input.disabled = true;
+                    prompt.style.visibility = 'hidden';
+
+                    for (const search_term of searches) {
+                        print(`\n\n--- Searching for: ${search_term.toUpperCase()} ---`);
+                        let found_any_for_this_pet = false;
+                        for (const v of variants_to_try) {
+                            const { pets, link } = await fetchData(search_term, v);
+                            if (pets) {
+                                found_any_for_this_pet = true;
+                                for (const pet of pets) {
+                                    const pet_value_raw = pet.value || '0';
+                                    const pet_value = parseValue(pet_value_raw);
+                                    total_value += pet_value;
+                                    const pet_display_name = `${pet.name || 'Unknown'} (${pet.variant || 'N/A'})`;
+                                    let display_value_str = "";
+                                    if (pet_value === 0 && String(pet_value_raw).trim().toUpperCase() !== '0' && String(pet_value_raw).trim().toUpperCase() !== '0.0') {
+                                        display_value_str = String(pet_value_raw);
+                                    } else {
+                                        display_value_str = pet_value.toLocaleString();
+                                    }
+                                    const pet_info_str = `${pet_display_name} | Value: ${display_value_str}`;
+                                    added_pets.push(pet_info_str);
+
+                                    const lines = [
+                                        `Name: ${pet.name || 'N/A'}`,
+                                        `Description: ${pet.description || 'N/A'}`,
+                                        `Chance: ${pet.chance || 'N/A'}`,
+                                        `Demand: ${pet.demand || 'N/A'}`,
+                                        `Owners: ${pet.owners || 'N/A'}`,
+                                        `Value: ${pet_value_raw} (${pet_value.toLocaleString()})`,
+                                        `Status: ${pet.status || 'N/A'}`,
+                                        `Variant: ${pet.variant || 'N/A'}`,
+                                        `Link: ${link || 'N/A'}`
+                                    ];
+                                    print("\n" + padLines(lines));
+                                    print(`\n>>> Added '${display_value_str}' to total. <<<`);
+                                }
+                            }
+                        }
+                        if (!found_any_for_this_pet) {
+                            print(`No pets found for '${search_term}' with the specified variants.`);
+                        }
+                    }
+
+                    input.disabled = false;
+                    input.focus();
+                    showCurrentDataScreen();
+                }
+            };
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    processEnter();
+                }
+            });
+
+            document.querySelector('.terminal').addEventListener('click', () => {
+                input.focus();
+            });
+
+            String.prototype.center = function(width, char = ' ') {
+                const len = this.length;
+                if (width <= len) return this.toString();
+                const left = Math.floor((width - len) / 2);
+                const right = width - len - left;
+                return char.repeat(left) + this + char.repeat(right);
+            };
+
+            showWelcomeScreen();
+        });
+    </script>
+</body>
+</html>
