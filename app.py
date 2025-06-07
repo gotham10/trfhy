@@ -34,9 +34,8 @@ def proxy_api():
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
-    except Exception as e:
+    except Exception:
         return res.text, res.status_code
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
