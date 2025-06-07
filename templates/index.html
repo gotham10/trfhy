@@ -7,8 +7,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
         html, body {
-            height: 100%;
-            width: 100%;
             margin: 0;
             padding: 0;
             background-color: #000000;
@@ -17,15 +15,10 @@
         }
         #terminal-container {
             padding: 1rem;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
         #terminal-output {
-            flex-grow: 1;
             white-space: pre-wrap;
             word-break: break-word;
-            overflow-y: auto;
         }
         .input-line {
             display: flex;
@@ -112,6 +105,10 @@
                 const width = Math.max(...splitLines.map(line => line[0].length));
                 return splitLines.map(line => `${line[0].padEnd(width, ' ')}: ${line[1]}`).join('\n');
             };
+            
+            const scrollToBottom = () => {
+                window.scrollTo(0, document.body.scrollHeight);
+            };
 
             const print = (text, isUserInput = false) => {
                 const line = document.createElement('div');
@@ -124,7 +121,7 @@
                 }
                 line.append(document.createTextNode(text));
                 output.appendChild(line);
-                output.scrollTop = output.scrollHeight;
+                scrollToBottom();
             };
 
             const clearScreen = () => {
@@ -156,9 +153,16 @@
                 prompt.style.visibility = 'hidden';
             };
             
-            const showCurrentDataScreen = () => {
-                clearScreen();
-                print("--- CURRENT DATA ---");
+            const promptForPetName = () => {
+                print("\nEnter pet name(s)... ");
+                prompt.style.visibility = 'visible';
+                state = 'awaiting_pet_name';
+                input.disabled = false;
+                input.focus();
+            };
+            
+            const printCurrentStatus = () => {
+                print("\n" + "--- CURRENT DATA ---");
                 if (added_pets.length === 0) {
                     print("  (None)");
                 } else {
@@ -166,9 +170,6 @@
                 }
                 print(`\nCURRENT TOTAL VALUE: ${total_value.toLocaleString()}`);
                 print("-".repeat(25));
-                print("\nEnter pet name(s)... ");
-                prompt.style.visibility = 'visible';
-                state = 'awaiting_pet_name';
             };
 
             const processEnter = async () => {
@@ -176,14 +177,17 @@
                 input.value = '';
 
                 if (state === 'paused') {
-                    showCurrentDataScreen();
+                    printCurrentStatus();
+                    promptForPetName();
                     return;
                 }
                 
                 print(cmd, true);
 
                 if (state === 'initial') {
-                    showCurrentDataScreen();
+                    clearScreen();
+                    printCurrentStatus();
+                    promptForPetName();
                     return;
                 }
 
@@ -214,7 +218,7 @@
                         return;
                     }
                     if (!cmd) {
-                        print("\nPet name cannot be blank. Press Enter to try again.");
+                        print("\nPet name cannot be blank. Press Enter to continue.");
                         state = 'paused';
                         prompt.style.visibility = 'hidden';
                         return;
@@ -224,11 +228,14 @@
                     state = 'awaiting_variant';
                 } else if (state === 'awaiting_variant') {
                     if (!cmd) {
-                        print("\nVariant cannot be blank. Press Enter to try again.");
+                        print("\nVariant cannot be blank. Press Enter to continue.");
                         state = 'paused';
                         prompt.style.visibility = 'hidden';
                         return;
                     }
+                    
+                    input.disabled = true;
+                    prompt.style.visibility = 'hidden';
 
                     const searches = pet_search_input.split(',').map(s => s.trim());
                     const raw_variants = cmd.split(',').map(v => v.trim());
@@ -254,16 +261,14 @@
                     }
 
                     if (variants_to_try.length === 0) {
-                        print("\nNo valid variants were entered. Press Enter to try again.");
+                        print("\nNo valid variants were entered. Press Enter to continue.");
                         state = 'paused';
                         prompt.style.visibility = 'hidden';
                         return;
                     }
-                    
-                    input.disabled = true;
-                    prompt.style.visibility = 'hidden';
 
                     for (const search_term of searches) {
+                        if (!search_term) continue;
                         print(`\n\n--- Searching for: ${search_term.toUpperCase()} ---`);
                         let found_any_for_this_pet = false;
                         for (const v of variants_to_try) {
@@ -304,21 +309,23 @@
                         }
                     }
 
-                    input.disabled = false;
-                    input.focus();
-                    showCurrentDataScreen();
+                    printCurrentStatus();
+                    promptForPetName();
                 }
             };
             
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    if(input.disabled) return;
                     processEnter();
                 }
             });
 
             document.body.addEventListener('click', () => {
-                input.focus();
+                if (!input.disabled) {
+                    input.focus();
+                }
             });
 
             String.prototype.center = function(width, char = ' ') {
