@@ -93,14 +93,14 @@
 
             const fetchData = async (search, variant) => {
                 const s = search.replace(/ /g, "+");
-                const url = `/api/items?search=${s}&variant=${variant}`;
+                const url = `/api/items?search=<span class="math-inline">\{s\}&variant\=</span>{variant}`;
                 try {
                     const res = await fetch(url);
                     const response = await res.json();
                     
                     const debug_div = document.createElement('div');
                     debug_div.className = 'debug-info';
-                    debug_div.innerHTML = `--- DEBUG for ${search} (${variant}) ---<br>` + Object.entries(response.debug).map(([key, value]) => `${key}: ${String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;")}`).join('<br>') + '<br>---------------------------------';
+                    debug_div.innerHTML = `--- DEBUG for <span class="math-inline">\{search\} \(</span>{variant}) ---<br>` + Object.entries(response.debug).map(([key, value]) => `${key}: ${String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;")}`).join('<br>') + '<br>---------------------------------';
                     output.appendChild(debug_div);
 
                     if (response.success && response.data && response.data.pets && response.data.pets.length > 0) {
@@ -291,7 +291,7 @@
                                     const pet_value_raw = pet.value || '0';
                                     const pet_value = parseValue(pet_value_raw);
                                     total_value += pet_value;
-                                    const pet_display_name = `${pet.name || 'Unknown'} (${pet.variant || 'N/A'})`;
+                                    const pet_display_name = `<span class="math-inline">\{pet\.name \|\| 'Unknown'\} \(</span>{pet.variant || 'N/A'})`;
                                     let display_value_str = "";
                                     if (pet_value === 0 && String(pet_value_raw).trim().toUpperCase() !== '0' && String(pet_value_raw).trim().toUpperCase() !== '0.0') {
                                         display_value_str = String(pet_value_raw);
@@ -307,7 +307,7 @@
                                         `Chance: ${pet.chance || 'N/A'}`,
                                         `Demand: ${pet.demand || 'N/A'}`,
                                         `Owners: ${pet.owners || 'N/A'}`,
-                                        `Value: ${pet_value_raw} (${pet_value.toLocaleString()})`,
+                                        `Value: <span class="math-inline">\{pet\_value\_raw\} \(</span>{pet_value.toLocaleString()})`,
                                         `Status: ${pet.status || 'N/A'}`,
                                         `Variant: ${pet.variant || 'N/A'}`
                                     ];
@@ -345,7 +345,7 @@
                 if (width <= len) return this.toString();
                 const left = Math.floor((width - len) / 2);
                 const right = width - len - left;
-                return char.repeat(left) + this + char.repeat(right);
+                return char.repeat(left) + this + char.repeat.
             };
 
             showWelcomeScreen();
