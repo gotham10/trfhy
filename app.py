@@ -22,21 +22,19 @@ def proxy_api():
     api_url = f"https://bgsi-kyc3.onrender.com/api/items?search={search}&variant={variant}"
     
     try:
-        res = requests.get(api_url)
+        res = requests.get(api_url, timeout=10)
         res.raise_for_status()
         raw_text = res.text
         
-        json_str = ""
         if "<pre>" in raw_text and "</pre>" in raw_text:
             json_str = raw_text.split("<pre>")[1].split("</pre>")[0]
-        else:
-            json_str = raw_text
-        
-        data = json.loads(json_str)
-        return jsonify(data)
+            data = json.loads(json_str)
+            return jsonify(data)
 
     except Exception:
-        return jsonify({"pagination": {}, "pets": []})
+        pass
+
+    return jsonify({"pagination": {}, "pets": []})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
