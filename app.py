@@ -15,26 +15,29 @@ def index():
 def proxy_api():
     search = request.args.get('search')
     variant = request.args.get('variant')
-
-    if not search or not variant:
-        return jsonify({"error": "Missing search or variant parameter"}), 400
-
     api_url = f"https://bgsi-kyc3.onrender.com/api/items?search={search}&variant={variant}"
     
+    debug_info = {
+        "URL Hit": api_url
+    }
+
     try:
         res = requests.get(api_url, timeout=10)
+        debug_info["Status Code"] = res.status_code
+        debug_info["Response Snippet"] = res.text[:400] + "..." if len(res.text) > 400 else res.text
         res.raise_for_status()
         raw_text = res.text
-        
+
         if "<pre>" in raw_text and "</pre>" in raw_text:
             json_str = raw_text.split("<pre>")[1].split("</pre>")[0]
             data = json.loads(json_str)
-            return jsonify(data)
+            return jsonify({"success": True, "debug": debug_info, "data": data})
+        else:
+            raise ValueError("API response was successful but contained no <pre> data tag.")
 
-    except Exception:
-        pass
-
-    return jsonify({"pagination": {}, "pets": []})
+    except Exception as e:
+        debug_info["Error"] = str(e)
+        return jsonify({"success": False, "debug": debug_info, "data": None})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
