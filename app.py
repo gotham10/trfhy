@@ -24,18 +24,19 @@ def proxy_api():
     try:
         res = requests.get(api_url)
         res.raise_for_status()
-        
         raw_text = res.text
+        
+        json_str = ""
         if "<pre>" in raw_text and "</pre>" in raw_text:
-            json_data = raw_text.split("<pre>")[1].split("</pre>")[0]
-            return jsonify(json.loads(json_data))
+            json_str = raw_text.split("<pre>")[1].split("</pre>")[0]
         else:
-            return jsonify(res.json())
+            json_str = raw_text
+        
+        data = json.loads(json_str)
+        return jsonify(data)
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": str(e)}), 500
     except Exception:
-        return res.text, res.status_code
+        return jsonify({"pagination": {}, "pets": []})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
